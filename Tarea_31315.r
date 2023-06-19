@@ -1,4 +1,4 @@
-ccc# cargar librerias
+# cargar librerias
 library(terra)
 library(sf)
 library(dplyr)
@@ -13,6 +13,7 @@ library(Kendall)
 library(raster)
 library(ggrepel)
 library(lwgeom)
+#probando
 
 options(scipen = 999)
 
