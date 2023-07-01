@@ -15,9 +15,12 @@ library(ggrepel)
 library(lwgeom)
 
 options(scipen = 999)
+#aqui poner el path de la carpeta para correr todo sin cambiar a cada rato
+#path <- ""
+#path = "C:/Users/alanp/Documents/5to/cs datos espaciales/tarea3" 
+path <- "/Users/itallo/Documents/GitHub/tarea3_datos"
 
-path = "C:/Users/alanp/Documents/5to/cs datos espaciales/tarea3" #aqui poner el path de la carpeta para correr todo sin cambiar a cada rato
-#path <- "/Users/itallo/Library/Mobile Documents/com~apple~CloudDocs/Documents/GitHub/Tarea2_final"
+
 # Cargar funciones --------------------------------------------------------
 # Leemos el raster y lo cortamos al area de interes
 km <- read_sf(paste0(path, "/polygon.kml"))
