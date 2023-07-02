@@ -560,37 +560,8 @@ der_topo$aspect = aspect.rec
 
 ####### Land Cover --------------------------------------------------------------
 
-# Leer Land Cover 2018
-lc <- lc.crop
-plot(lc, main = 'Land Cover Aconcagua 2018')
-
-# Tabla de clases (Look up table)
-lut = tibble(cat = 0:6,
-             name = c('Bosque Nativo','Agricultura de secano',
-                      'Plantaciones Forestales','Matorrales',
-                      'Pastizales','Suelo Desnudo',
-                      'Agricultura de riego'))
-
-# Asignar clases a los valores del raster
-levels(lc) = lut
-
 # paleta de colores
 colores = RColorBrewer::brewer.pal(7, "Set1");colores
-plot(lc, main = 'Land Cover Aconcagua 2018', col = colores)
-
-# Llevar LC a la misma proyeccion que la ETr
-lc = project(lc, crs(et.y), method = "near")
-
-# cuanto mas grande son los pixeles de ET de modis con respecto a la resolucion
-# del LandCover?
-fac = res(et.y)[1]/res(lc)[1];fac
-# cambiar resolucion a un raster
-lc.agg = aggregate(lc, fact = fac, fun = "modal")
-plot(lc.agg, main = "LandCover de baja resolucion")
-
-# # Land Cover solo resampleando
-# lc = resample(lc, et.y, method = "near")
-# plot(lc, main = 'Land Cover Cauquenes 2018 sin agregacion', col = colores)
 
 # Resamplear LandCover para que coincida con los pixeles de ETr
 lc.res = resample(lc.agg, et.y, method = "near")
@@ -598,9 +569,8 @@ plot(lc.res, main = 'Land Cover Cauquenes 2018 con agregacion', col = colores)
 
 # Extraer pixeles de plantaciones forestales
 lc.pf = lc.res
-lc.pf[lc.res != 2] = NA
+lc.pf[lc.res != 5] = NA
 plot(lc.pf, col = c("#000000"))
-
 
 ###### ETr de plantaciones forestales segun su elevacion --------------------------
 
