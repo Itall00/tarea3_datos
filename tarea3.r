@@ -25,7 +25,7 @@ path <- "/Users/itallo/Documents/GitHub/tarea3_datos"
 # Leemos el raster y lo cortamos al area de interes
 km <- read_sf(paste0(path, "/polygon.kml"))
 km <- mutate(km, Description = "Rio Aconcagua", altura = 1021)
-write_sf(km, paste0(path, "/polygon.geojson"))
+write_sf(km, paste0(path, "/polygon.geojson"), overwrite=TRUE)
 img.folder <- paste0(path, "/landsat")
 files <- list.files(img.folder, pattern = "SR_B", full.names = TRUE)
 imgs <- rast(files)
