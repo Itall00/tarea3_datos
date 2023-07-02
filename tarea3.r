@@ -480,23 +480,23 @@ text(
   pos = 3
 )
 
+######## Cuenca de estudio -------------------------------------------------------
+
+# leer shape de la cuenca
+cuenca.t = read_sf(paste0(path, "/cuenca.kml")) %>%
+  # reproyectar a coordenadas geográficas
+  st_transform(4326)
 ######## Modelo de ElevaciÃ³n Digital (DEM) ---------------------------------------
 
 # DEM
-demi = rast(paste0(path, "/SRTMGL1_NC.003_SRTMGL1_DEM_doy2000042_aid0001.TIF"))
+dem = rast(paste0(path, "/SRTMGL1_NC.003_SRTMGL1_DEM_doy2000042_aid0001.TIF"))
 
 # graficar
-plot(demi)
+plot(dem)
 # explorar valores del raster
-hist(demi)
-summary(demi)
-summary(values(demi))
-
-dem.proj <- project(demi, cuenca, method = "near") # Metodo near para datos categoricos
-dem.mask <- mask(dem.proj, cuenca)
-dem.crop <- crop(dem.mask, cuenca)
-plot(dem.crop)
-dem<-dem.crop
+hist(dem)
+summary(dem)
+summary(values(dem))
 
 # calcular derivadas topograficas
 der_topo = terrain(dem, v = c("slope","aspect","TPI","TRI","roughness","flowdir"))
@@ -519,11 +519,70 @@ lut = tibble(ID = 1:2, ladera = c("Bajo","Alto"))
 
 # asignar categorias a los valores del raster
 levels(dem.rec) = lut
-plot(mask(dem.rec, km))
+plot(mask(dem.rec, cuenca.t))
 
 # agregar dem al stack de imagenes de derivadas topograficas
 der_topo$dem = dem.rec
 plot(der_topo)
+
+######## Topographic Position Index ----------------------------------------------
+hist(der_topo$TPI)
+summary(values(der_topo$TPI))
+
+# generar breaks para una escala de cuantiles
+quantile_scale = function(x, quantiles  = c(0.0001, 0.25, 0.5, 0.75, 0.9999)){
+  q = c()
+  for (i in 1:length(quantiles)) {
+    q = c(q, quantile(x, quantiles[i], na.rm =TRUE))
+  }
+  return(q)
+}
+
+# plotear TPI con escala de cuantiles
+qscale = quantile_scale(values(der_topo$TPI))
+plot(der_topo$TPI, breaks = qscale)
+
+# Mejorar resultado cambiando el tamaño de la ventana movil
+# tamaño de la ventana
+n = 11
+# matriz con la posicion de cada celda de la ventana movil
+f <- matrix(1:(n*n), nrow=n, ncol=n)
+f
+# cual es el indice del pixel del centro?
+centro = f[ceiling(n/2),ceiling(n/2)]
+centro
+# crear matriz con solo valores 1
+f <- matrix(1, nrow=n, ncol=n)
+f
+# aplicar una funcion con una ventana movil con la funcion focal
+# el valor de cada celda de la matriz representa su peso
+TPI <- focal(dem, w=f, fun=function(x, ...) x[centro] - mean(x[-centro], na.rm = TRUE))
+hist(TPI)
+summary(values(TPI))
+
+# plotear usando una escala de colores en cuantiles
+qscale = quantile_scale(values(TPI))
+plot(TPI, breaks = qscale, main = str_c("TPI con ventana movil de ", n,"x",n," pixels"))
+
+# exportar resultado
+# direccion carpeta de salida
+dir = paste0(path, "/derivadas_topo")
+# crear carpeta
+dir.create(dir)
+# nombre del archivo
+fname = str_c(dir, "/TPI_",n,".tif");fname
+# guardar archivo tif de la imagen
+writeRaster(TPI, fname, overwrite = TRUE)
+
+# # crear mapa interactivo simple
+# remotes::install_github("rstudio/leaflet")
+# library(leaflet)
+# plet(TPI)
+
+# reemplazar TPI con la ventana movil corregida
+der_topo$TPI = TPI
+der_topo
+
 
 ######## ExposiciÃ³n --------------------------------------------------------------
 
@@ -558,6 +617,89 @@ plot(aspect.rec, col = colores, main = "ExposiciÃ³n reclasificada")
 # reemplazar exposicion por la reclasificacion creada
 der_topo$aspect = aspect.rec
 
+####### Pendiente ---------------------------------------------------------------
+slope = der_topo$slope
+plot(slope, main = "Pendiente")
+hist(slope)
+
+# reclasificar exposicion en categorias Norte, Sur, Este y Oeste
+# crear matriz de reclasificacion
+rcl.matrix = matrix(
+  c(0,5,1,
+    5,15,2,
+    15,30,3,
+    30, Inf,4), 
+  ncol = 3, byrow = TRUE)
+
+# reclasificar en laderas
+slope.rec = classify(slope, rcl.matrix)
+plot(slope.rec)
+
+# tabla con categorias (Look Up Table)
+lut = tibble(ID = 1:4, 
+             pendiente = c("Suave","Moderada","Pronunciada","Muy Pronunciada"))
+# asignar categorias a los valores del raster
+levels(slope.rec) = lut
+# observar valores y etiqueta
+unique(slope.rec)
+# paleta de colores categorica
+colores = terrain.colors(4, alpha = 0.8)
+#graficar
+plot(slope.rec, col = colores, main = "Pendiente reclasificada")
+# reemplazar pendiente por la reclasificacion creada
+der_topo$slope = slope.rec
+plot(der_topo)
+
+
+####### Exportar derivadas topográficas -----------------------------------------
+# nombre del archivo
+fname = str_c(dir, "/derivadas_topograficas.tif");fname
+# guardar archivo tif de la imagen
+writeRaster(der_topo, fname, overwrite = TRUE, datatype = "INT2S")
+
+
+######## Evapotranspiración real -------------------------------------------------
+
+# carpeta donde se encuentran los archivos de evapotranspiracion real de MODIS
+dir = paste0(path, "/modis")
+
+# obtener la direccion de los archivos en la carpeta
+files = list.files(dir, full.names = TRUE, pattern = "aid0001");files
+
+# leer rasters
+et = rast(files)
+et
+
+# crear vector de fechas
+fechas.et = names(et) %>% 
+  #recortamos los nombres  desde el caracter 26 al caracter 32.
+  str_sub(start = 26, end = 32) %>%
+  # le damos formato de fecha, %Y = YYYY, %j=ddd (numero de dia del año o dia juliano)
+  as.Date("%Y%j")
+fechas.et
+
+# asignamos las fechas como nombre de las capas
+names(et) = fechas.et
+
+# separar las imagenes que abarcan mas de un mes dentro de los 8 dias del composite
+et = separate_eight_day_composite(et, fechas.et);et
+
+# actualizar vector de fechas
+fechas.et = as_date(names(et))
+
+# calcular imagenes mensuales y anuales de etr
+et.m = daily_to_monthly(et, dates = fechas.et, fun = "sum");et.m
+et.y = to_yearly(et.m, dates = names(et.m), fun = "sum");et.y
+
+# histogramas
+hist(et.y[[1]])
+
+# resumen estadistico
+summary(et.y)
+
+# eliminar pixeles anormales
+et.y[et.y > 1500] = NA
+
 ####### Land Cover --------------------------------------------------------------
 
 # paleta de colores
@@ -569,7 +711,7 @@ plot(lc.res, main = 'Land Cover Cauquenes 2018 con agregacion', col = colores)
 
 # Extraer pixeles de plantaciones forestales
 lc.pf = lc.res
-lc.pf[lc.res != 5] = NA
+lc.pf[lc.res != 2] = NA
 plot(lc.pf, col = c("#000000"))
 
 ###### ETr de plantaciones forestales segun su elevacion --------------------------
@@ -578,7 +720,7 @@ plot(lc.pf, col = c("#000000"))
 elev = resample(der_topo$dem, lc.pf, method = "near")
 elev.pf = mask(elev, lc.pf)
 plot(elev.pf, col = c("#377EB8","#E41A1C"),
-     main = "Plantaciones forestales segÃºn su elevaciÃ³n")
+     main = "Plantaciones forestales según su elevación")
 
 # evapotranspiracion de plantaciones forestales clasificadas por pendiente
 et.mean.pf = zonal(et.y, elev.pf, fun = "mean", na.rm = TRUE) %>% 
@@ -589,7 +731,7 @@ et.mean.pf = zonal(et.y, elev.pf, fun = "mean", na.rm = TRUE) %>%
 ggplot(et.mean.pf)+
   geom_line(aes(x = fecha, y = ET, color = dem), linewidth = 0.8)+
   labs(y = "ETr (mm)", color = "Altura",
-       title = "EvapotranspiraciÃ³n real anual de plantaciones forestales segÃºn su elevaciÃ³n")
+       title = "Evapotranspiración real anual de plantaciones forestales según su elevación")
 
 
 # Modificar LandCover
@@ -640,7 +782,18 @@ et.mean = zonal(et.y, lc.mod, fun = "mean", na.rm = TRUE) %>%
 ggplot(et.mean)+
   geom_line(aes(x = fecha, y = ET, color = name), linewidth = 0.8)+
   labs(y = "ETr (mm)", color = "Altura",
-       title = "EvapotranspiraciÃ³n real anual por cobertura de suelo")
+       title = "Evapotranspiración real anual por cobertura de suelo")
+
+
+
+
+
+
+
+
+
+
+
 
 
 # Modificar EvapotranspiraciÃ³n real ---------------------------------------
@@ -737,9 +890,9 @@ etrmod_total %>%
 #write_csv(etrmod_total, "resultados/evapotranspiracion_total_por_cobertura_modificada.csv")
 
 plot(et.mod)
-plot(cuenca)
+plot(cuenca.t)
 # Etr anual de la cuenca modificada para el balance hidrico
-extr = terra::extract(et.mod, cuenca)
+extr = terra::extract(et.mod, cuenca.t)
 et.year.mod = extr %>%
   select(-ID) %>% 
   drop_na() %>% 
@@ -749,7 +902,7 @@ et.year.mod = extr %>%
 et.year.mod
 
 # Etr anual de la cuenca riginalpara el balance hidrico
-extr = terra::extract(et.y, cuenca)
+extr = terra::extract(et.y, cuenca.t)
 et.year = extr %>%
   select(-ID) %>% 
   drop_na() %>% 
@@ -781,7 +934,7 @@ fechas.pp = seq(
 names(pp) = fechas.pp
 
 # extraer valores dentro de la cuenca
-extr = terra::extract(pp, cuenca)
+extr = terra::extract(pp, cuenca.t)
 as_tibble(extr)
 
 # calcular precipitacion promedio de la cuenca
@@ -809,8 +962,6 @@ pp.year = pp.month %>%
 pp.year
 
 # Datos descargados de la DGA
-############
-
 ############
 
 
