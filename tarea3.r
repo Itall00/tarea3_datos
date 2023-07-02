@@ -558,3 +558,330 @@ plot(aspect.rec, col = colores, main = "ExposiciÃ³n reclasificada")
 # reemplazar exposicion por la reclasificacion creada
 der_topo$aspect = aspect.rec
 
+####### Land Cover --------------------------------------------------------------
+
+# Leer Land Cover 2018
+lc <- lc.crop
+plot(lc, main = 'Land Cover Aconcagua 2018')
+
+# Tabla de clases (Look up table)
+lut = tibble(cat = 0:6,
+             name = c('Bosque Nativo','Agricultura de secano',
+                      'Plantaciones Forestales','Matorrales',
+                      'Pastizales','Suelo Desnudo',
+                      'Agricultura de riego'))
+
+# Asignar clases a los valores del raster
+levels(lc) = lut
+
+# paleta de colores
+colores = RColorBrewer::brewer.pal(7, "Set1");colores
+plot(lc, main = 'Land Cover Aconcagua 2018', col = colores)
+
+# Llevar LC a la misma proyeccion que la ETr
+lc = project(lc, crs(et.y), method = "near")
+
+# cuanto mas grande son los pixeles de ET de modis con respecto a la resolucion
+# del LandCover?
+fac = res(et.y)[1]/res(lc)[1];fac
+# cambiar resolucion a un raster
+lc.agg = aggregate(lc, fact = fac, fun = "modal")
+plot(lc.agg, main = "LandCover de baja resolucion")
+
+# # Land Cover solo resampleando
+# lc = resample(lc, et.y, method = "near")
+# plot(lc, main = 'Land Cover Cauquenes 2018 sin agregacion', col = colores)
+
+# Resamplear LandCover para que coincida con los pixeles de ETr
+lc.res = resample(lc.agg, et.y, method = "near")
+plot(lc.res, main = 'Land Cover Cauquenes 2018 con agregacion', col = colores)
+
+# Extraer pixeles de plantaciones forestales
+lc.pf = lc.res
+lc.pf[lc.res != 2] = NA
+plot(lc.pf, col = c("#000000"))
+
+
+###### ETr de plantaciones forestales segun su elevacion --------------------------
+
+# Mapa de elevacion de plantaciones forestales
+elev = resample(der_topo$dem, lc.pf, method = "near")
+elev.pf = mask(elev, lc.pf)
+plot(elev.pf, col = c("#377EB8","#E41A1C"),
+     main = "Plantaciones forestales segÃºn su elevaciÃ³n")
+
+# evapotranspiracion de plantaciones forestales clasificadas por pendiente
+et.mean.pf = zonal(et.y, elev.pf, fun = "mean", na.rm = TRUE) %>% 
+  pivot_longer(cols = 2:23, names_to = "fecha", values_to = "ET") %>% 
+  mutate(fecha = as_date(fecha))
+
+# grafico de et anual
+ggplot(et.mean.pf)+
+  geom_line(aes(x = fecha, y = ET, color = dem), linewidth = 0.8)+
+  labs(y = "ETr (mm)", color = "Altura",
+       title = "EvapotranspiraciÃ³n real anual de plantaciones forestales segÃºn su elevaciÃ³n")
+
+
+# Modificar LandCover
+# Eliminar pixeles del LC original
+
+# copiar LandCover original
+lc.orig = lc.res
+
+# Eliminar pixeles de plantaciones forestales
+lc.orig[lc.res == 2] = NA
+
+# LandCover sin plantaciones
+plot(lc.orig, main = "LC sin plantaciones")
+as.numeric(lc.orig) %>% unique
+
+# Agregar pixeles de Plantaciones reclasificados por altura
+elev.pf[elev.pf == 1] = 7
+
+# Transformar en un raster de numeros para visualizar los nuevos valores
+elev.pf = as.numeric(elev.pf)
+plot(elev.pf, main = "Valores de las plantaciones reclasificadas")
+
+# Pegar ambas imagenes con la funcion mosaic
+lc.mod = mosaic(lc.orig, elev.pf, fun = "max")
+
+# Nueva tabla de clases
+lut = tibble(cat = 0:7,
+             name = c('Bosque Nativo','Agricultura de secano',
+                      'Plantaciones Forestales Altas','Matorrales',
+                      'Pastizales','Suelo Desnudo',
+                      'Agricultura de riego', 'Plantaciones Forestales Bajas'))
+
+# Asignar clases a los valores del raster
+levels(lc.mod) = lut
+
+# Graficar Land Cover
+# Original
+plot(lc.res, col = RColorBrewer::brewer.pal(7, "Set2"), main = "LC original")
+# Modificado
+plot(lc.mod, col = RColorBrewer::brewer.pal(8, "Set2"), main = "LC modificado")
+
+# evapotranspiracion de plantaciones forestales clasificadas por pendiente
+et.mean = zonal(et.y, lc.mod, fun = "mean", na.rm = TRUE) %>% 
+  pivot_longer(cols = 2:23, names_to = "fecha", values_to = "ET") %>% 
+  mutate(fecha = as_date(fecha))
+
+# grafico de et anual
+ggplot(et.mean)+
+  geom_line(aes(x = fecha, y = ET, color = name), linewidth = 0.8)+
+  labs(y = "ETr (mm)", color = "Altura",
+       title = "EvapotranspiraciÃ³n real anual por cobertura de suelo")
+
+
+# Modificar EvapotranspiraciÃ³n real ---------------------------------------
+
+# Asignar ET anual de las plantaciones a los pixeles de matorral
+lut
+# raster vacio para guardar et modificada
+et.mod = rast()
+# numero de capaz sobre las que iterar
+n = nlyr(et.y)
+# vector con la ETr anual de las plantaciones forestales
+et_pf = et.mean %>% 
+  filter(name == 'Plantaciones Forestales Bajas') %>% 
+  pull(ET);et_pf
+
+# ciclo de 1 a n
+for (i in 1:n) {
+  # seleccionar imagen i de ETr
+  img_i = et.y[[i]]
+  # modificar ETr de las plantaciones a los pixeles que tienen categoria 4 en el LC (matorrales)a
+  img_i[lc.mod == 3] = et_pf[i]
+  # guardar la imagen modificada junto con las anteriores
+  et.mod = c(et.mod, img_i)
+}
+
+# plot ET original
+plot(et.y[[1]], main = paste0(names(et.y)[1], ' ET original'))
+# plot ET modificada
+plot(et.mod[[1]], main = paste0(names(et.y)[1], ' ET modificada'))
+plot(mask(et.mod[[1]], lc.mod), main = paste0(names(et.y)[1], ' ET modificada'))
+
+# Land Cover Modificado
+lc.esc.1 = lc.mod
+# Cambiar coberturas de matorral por plantacion forestal.
+lc.esc.1[lc.mod == 3] = 7
+
+# Transformar valores de mm a m3/aÃ±o
+# calcular el area de la cuenca
+# resolucion espacial del raster de ETr es de 500m
+# res(et)*111*1000 #m
+area_pixel = 500*500 #m2
+
+# transformar unidades
+et.y.m3 = et.y * (0.001*area_pixel)
+et.mod.m3 = et.mod * (0.001*area_pixel)
+plot(et.mod.m3)
+plot(et.y.m3)
+
+# serie de tiempo de cobertura modificada
+etrmod_total = zonal(et.mod.m3, lc.esc.1, fun = 'sum', na.rm = TRUE) %>% 
+  pivot_longer(cols = 2:23, names_to = 'fecha', values_to = 'ET') %>% 
+  mutate(fecha = as_date(fecha))
+etrmod_total
+
+# graficar serie de tiempo por cobertura
+ggplot(etrmod_total, aes(x = fecha, y = ET, color = name))+
+  geom_line(linewidth = 1)+
+  labs(x = 'AÃ±o', y = 'Etr (m3/aÃ±o)', title = 'Consumo total por cobertura de suelo',
+       color = 'Cobertura')
+
+etrmod_total = etrmod_total %>% group_by(fecha) %>% 
+  mutate(
+    prop = 100*ET/sum(ET)
+  )
+
+# grafico de torta (pie)
+etrmod_total %>% ggplot(aes(x = '', y = prop, fill = name))+
+  geom_bar( 
+    stat = 'identity', width = 1,
+    color="white"
+  )+
+  coord_polar("y", start=0)+
+  theme_void()+
+  facet_wrap(.~fecha, drop = TRUE)+ #crea un grafico por cada valor unico de fecha
+  scale_fill_brewer(palette="Set1")+ # remove background, grid, numeric labels
+  labs(fill = 'Cobertura', title = 'EvapotranspiraciÃ³n real anual por cada cobertura de suelo')
+
+# Graficar solo un aÃ±o
+etrmod_total %>% 
+  filter(fecha == ymd("2021-01-01")) %>% 
+  ggplot(aes(x = '', y = prop, fill = name))+
+  geom_bar( 
+    stat = 'identity', width = 1,
+    color="white"
+  )+
+  coord_polar("y", start=0)+
+  theme_void()+
+  facet_wrap(.~fecha, drop = TRUE)+
+  scale_fill_brewer(palette="Set1")+ # remove background, grid, numeric labels
+  labs(fill = 'Cobertura', title = 'EvapotranspiraciÃ³n real anual por cada cobertura de suelo')
+
+# exportar tabla con datos de etr total por cobertura
+#dir.create("resultados")
+#write_csv(etrmod_total, "resultados/evapotranspiracion_total_por_cobertura_modificada.csv")
+
+plot(et.mod)
+plot(cuenca)
+# Etr anual de la cuenca modificada para el balance hidrico
+extr = terra::extract(et.mod, cuenca)
+et.year.mod = extr %>%
+  select(-ID) %>% 
+  drop_na() %>% 
+  summarise_all(median) %>%
+  pivot_longer(cols = 1:ncol(.), names_to = "fecha", values_to = "et_mod") %>% 
+  mutate(fecha = as_date(fecha))
+et.year.mod
+
+# Etr anual de la cuenca riginalpara el balance hidrico
+extr = terra::extract(et.y, cuenca)
+et.year = extr %>%
+  select(-ID) %>% 
+  drop_na() %>% 
+  summarise_all(median) %>%
+  pivot_longer(cols = 1:ncol(.), names_to = "fecha", values_to = "et") %>% 
+  mutate(fecha = as_date(fecha))
+et.year
+
+# Precipitacion CR2MET -------------------------------------------------------
+
+# carpeta donde se encuentran los archivos de evapotranspiracion real de MODIS
+pp.dir = "data/raster/PPCR2MET2.5"
+
+# obtener la direccion de los archivos en la carpeta
+files = list.files(pp.dir, full.names = TRUE, pattern = "nc$");files
+
+# leer rasters
+pp = rast(files)
+pp
+
+# crear vector de fechas
+fechas.pp = seq(
+  ymd("1960-01-01"),
+  ymd("2021-12-31"),
+  by = "days"
+)
+
+# asignamos las fechas como nombre de las capas
+names(pp) = fechas.pp
+
+# extraer valores dentro de la cuenca
+extr = terra::extract(pp, cuenca)
+as_tibble(extr)
+
+# calcular precipitacion promedio de la cuenca
+pp.day = extr %>%
+  select(-ID) %>% 
+  drop_na() %>% 
+  summarise_all(mean) %>% 
+  pivot_longer(cols = 1:ncol(.), names_to = "fecha", values_to = "pp")
+pp.day
+
+# PP mensual
+pp.month = pp.day %>% 
+  mutate(fecha = as_date(fecha),
+         fecha = floor_date(fecha, unit = "month")) %>% 
+  group_by(fecha) %>% 
+  summarise(pp = sum(pp))
+pp.month
+
+# PP anual
+pp.year = pp.month %>% 
+  mutate(fecha = as_date(fecha),
+         fecha = floor_date(fecha, unit = "year")) %>% 
+  group_by(fecha) %>% 
+  summarise(pp = sum(pp))
+pp.year
+
+# Datos descargados de la DGA
+q.month = read_csv("data/table/Caudal_Cauquenes.csv") %>% 
+  pivot_longer(cols = 2:13, names_to = "mes",values_to = "caudal") # pivotear columnas
+q.month
+
+# vector de fechas mensuales
+fechas = seq(ym("1987-01"), ym("2021-12"), by = "months")
+
+# crear columna con fechas
+q.month = q.month %>% 
+  mutate(fecha = fechas) %>% 
+  select(fecha, caudal)
+q.month
+
+# calcular caudal medio anual
+q.year = q.month %>% 
+  mutate(fecha = floor_date(fecha,unit = "year")) %>% 
+  group_by(fecha) %>% 
+  summarise_all(mean)
+q.year
+
+# Juntar variables del Balance Hidrico ------------------------------------
+data.year = full_join(pp.year, et.year.mod, by = "fecha") %>% 
+  full_join(et.year, by = "fecha") %>% 
+  full_join(q.year, by = "fecha") %>% 
+  mutate(
+    disp = pp-et-caudal,
+    disp_mod = pp-et_mod-caudal
+    
+  )
+
+# Balance a hidrico anual
+# serie de tiempo de datos anuales
+ggplot(data.year)+
+  geom_line(aes(x = fecha, y = pp, color = "PrecipitaciÃ³n"), linewidth = 0.8)+
+  geom_line(aes(x = fecha, y = et, color = "ETr"), linewidth = 0.8)+
+  geom_line(aes(x = fecha, y = et_mod, color = "ETr_modificada"), linewidth = 0.8)+
+  geom_line(aes(x = fecha, y = caudal,color = "Caudal"), linewidth = 0.8)+
+  geom_point(aes(x = fecha, y = caudal,color = "Caudal"), linewidth = 0.8)+
+  geom_line(aes(x = fecha, y = disp, color = "Disponibilidad"), linewidth = 0.8)+
+  geom_line(aes(x = fecha, y = disp_mod, color = "Disponibilidad_mod"), linewidth = 0.8)+
+  geom_hline(yintercept = 0, linewidt = 0.8, linetype = "dashed")+
+  scale_x_date(limits = c(ymd("2000-01-01"), ymd("2021-12-31")),
+               date_labels = "%Y", date_breaks = "2 year")+
+  labs(x = "tiempo", y = "(mm)", title = "Serie de tiempo mensual de componentes del BH",
+       subtitle = "Los aÃ±os sin medicion de caudal, faltan datos en algunos meses",
+       color = "")
