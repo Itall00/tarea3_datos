@@ -17,8 +17,8 @@ library(lwgeom)
 options(scipen = 999)
 #aqui poner el path de la carpeta para correr todo sin cambiar a cada rato
 #path <- ""
-path = "C:/Users/alanp/Documents/5to/cs datos espaciales/tarea3" 
-#path <- "/Users/itallo/Documents/GitHub/tarea3_datos"
+#path = "C:/Users/alanp/Documents/5to/cs datos espaciales/tarea3" 
+path <- "/Users/itallo/Documents/GitHub/tarea3_datos"
 
 
 # Cargar funciones --------------------------------------------------------
@@ -160,6 +160,10 @@ separate_eight_day_composite <- function(x, fechas) {
   return(r)
 }
 
+
+
+
+
 # Obtenemos las imagenes mensuales a partir de diarias
 daily_to_monthly <- function(x, dates, fun = "mean") {
   mes <- floor_date(as_date(dates), unit = "month")
@@ -249,6 +253,12 @@ cat.npix <- table(values.lc) %>%
 lc.r <- terra::project(lc.crop, crs(et.y), method = "near")
 lc.r
 plot(lc.r, main = "Land Cover reproyectado")
+
+
+
+
+
+
 
 rcl <- c(
   100, 150, 1,
@@ -708,7 +718,7 @@ colores = RColorBrewer::brewer.pal(7, "Set1");colores
 # Resamplear LandCover para que coincida con los pixeles de ETr
 lc.res = resample(lc.agg, et.y, method = "near")
 plot(lc.res, main = 'Land Cover Cauquenes 2018 con agregacion', col = colores)
-
+et.y
 # Extraer pixeles de plantaciones forestales
 lc.pf = lc.res
 lc.pf[lc.res != 2] = NA
@@ -718,9 +728,74 @@ plot(lc.pf, col = c("#000000"))
 
 # Mapa de elevacion de plantaciones forestales
 elev = resample(der_topo$dem, lc.pf, method = "near")
+
+elev
+lc.pf
+
+
+
+##
+st_crs(elev) == st_crs(lc.pf)
+
+st_crs(elev)
+st_crs(lc.pf)
+
+lc.pf=lc.pf_reproyectado
+
+
+
+
+
+# Exportamos lc.pf a un archivo GeoTIFF
+writeRaster(lc.pf, "lc_pf2.tif")
+# Exportamos lc.pf a un archivo GeoTIFF, sobrescribiendo si es necesario
+writeRaster(lc.pf, paste0(path, "/lc_pf2.tif"), overwrite=TRUE)
+
+
+
+# Exportamos lc.pf a un archivo GeoTIFF
+writeRaster(elev, "elev2.tif")
+# Exportamos lc.pf a un archivo GeoTIFF, sobrescribiendo si es necesario
+writeRaster(elev, paste0(path, "/elev2.tif"), overwrite=TRUE)
+
+
+
+###
+library(sf)
+library(terra)
+
+# Reproyectamos lc.pf al CRS de elev (WGS 84)
+lc.pf_reproyectado <- project(lc.pf, crs(elev))
+
+# Verificamos el nuevo CRS
+crs(lc.pf_reproyectado)
+
+lc.pf=lc.pf_reproyectado
+###
+
+st_crs(lc.pf) == st_crs(elev) # verificamos que se tenga el mismo crs
+
+## Aqui buscamos solucionar que el [mask] extents do not match
+
+# Cargamos la biblioteca
+library(terra)
+
+# Recortamos elev para que tenga la misma extensión que lc.pf
+elev_cropped <- crop(elev, ext(lc.pf))
+
+# Ahora deberías poder enmascarar sin problemas
+elev.pf = mask(elev_cropped, lc.pf)
+
+
+
+
+#### Visualizamos el problema 
+
+
 elev.pf = mask(elev, lc.pf)
 plot(elev.pf, col = c("#377EB8","#E41A1C"),
      main = "Plantaciones forestales según su elevación")
+
 
 # evapotranspiracion de plantaciones forestales clasificadas por pendiente
 et.mean.pf = zonal(et.y, elev.pf, fun = "mean", na.rm = TRUE) %>% 

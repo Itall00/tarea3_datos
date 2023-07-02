@@ -1,0 +1,17 @@
+<PAMDataset>
+  <Metadata>
+    <MDI key="add_offset">0.0</MDI>
+    <MDI key="scale_factor">0.1</MDI>
+    <MDI key="units">kg/m^2/8day</MDI>
+  </Metadata>
+  <PAMRasterBand band="1">
+    <Scale>0.1</Scale>
+    <Metadata>
+      <MDI key="STATISTICS_MAXIMUM">32766</MDI>
+      <MDI key="STATISTICS_MEAN">10585.989774358</MDI>
+      <MDI key="STATISTICS_MINIMUM">7</MDI>
+      <MDI key="STATISTICS_STDDEV">15278.209165821</MDI>
+      <MDI key="STATISTICS_VALID_PERCENT">59</MDI>
+    </Metadata>
+  </PAMRasterBand>
+</PAMDataset>
