@@ -483,15 +483,20 @@ text(
 ######## Modelo de ElevaciÃ³n Digital (DEM) ---------------------------------------
 
 # DEM
-dem = rast(paste0(path, "/SRTMGL1_NC.003_SRTMGL1_DEM_doy2000042_aid0001.TIF"))
-
+demi = rast(paste0(path, "/SRTMGL1_NC.003_SRTMGL1_DEM_doy2000042_aid0001.TIF"))
 
 # graficar
-plot(dem)
+plot(demi)
 # explorar valores del raster
-hist(dem)
-summary(dem)
-summary(values(dem))
+hist(demi)
+summary(demi)
+summary(values(demi))
+
+dem.proj <- project(demi, cuenca, method = "near") # Metodo near para datos categoricos
+dem.mask <- mask(dem.proj, cuenca)
+dem.crop <- crop(dem.mask, cuenca)
+plot(dem.crop)
+dem<-dem.crop
 
 # calcular derivadas topograficas
 der_topo = terrain(dem, v = c("slope","aspect","TPI","TRI","roughness","flowdir"))
@@ -514,7 +519,7 @@ lut = tibble(ID = 1:2, ladera = c("Bajo","Alto"))
 
 # asignar categorias a los valores del raster
 levels(dem.rec) = lut
-plot(mask(dem.rec, cuenca))
+plot(mask(dem.rec, km))
 
 # agregar dem al stack de imagenes de derivadas topograficas
 der_topo$dem = dem.rec
