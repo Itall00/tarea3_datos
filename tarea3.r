@@ -17,8 +17,8 @@ library(lwgeom)
 options(scipen = 999)
 #aqui poner el path de la carpeta para correr todo sin cambiar a cada rato
 #path <- ""
-#path = "C:/Users/alanp/Documents/5to/cs datos espaciales/tarea3" 
-path <- "/Users/itallo/Documents/GitHub/tarea3_datos"
+path = "C:/Users/alanp/Documents/5to/cs datos espaciales/tarea3" 
+#path <- "/Users/itallo/Documents/GitHub/tarea3_datos"
 
 
 # Cargar funciones --------------------------------------------------------
@@ -480,8 +480,74 @@ text(
   pos = 3
 )
 
+######## Modelo de ElevaciÃ³n Digital (DEM) ---------------------------------------
 
+# DEM
+dem = rast("DATA/RASTER/DEM/DEM_SRTM_CAUQUENES.TIF")
+# graficar
+plot(dem)
+# explorar valores del raster
+hist(dem)
+summary(dem)
+summary(values(dem))
 
+# calcular derivadas topograficas
+der_topo = terrain(dem, v = c("slope","aspect","TPI","TRI","roughness","flowdir"))
+der_topo
+# graficar
+plot(der_topo)
 
+# Reclasificar mapa de elevacion
+# crear matriz de reclasificaciÃ³n
+rcl.matrix = matrix(
+  c(-1, 250,1,
+    250,Inf,2),
+  ncol = 3, byrow = TRUE)
 
+# reclasificar
+dem.rec = classify(dem, rcl.matrix)
+
+# tabla con categorias (Look Up Table)
+lut = tibble(ID = 1:2, ladera = c("Bajo","Alto"))
+
+# asignar categorias a los valores del raster
+levels(dem.rec) = lut
+plot(mask(dem.rec, cuenca))
+
+# agregar dem al stack de imagenes de derivadas topograficas
+der_topo$dem = dem.rec
+plot(der_topo)
+
+######## ExposiciÃ³n --------------------------------------------------------------
+
+# Extraer la imagen de exposicion
+aspect = der_topo$aspect
+plot(aspect, main = "ExposiciÃ³n")
+hist(aspect)
+summary(values(aspect))
+
+# reclasificar exposicion en categorias Norte, Sur, Este y Oeste
+# crear matriz de reclasificacion
+rcl.matrix = matrix(
+  c(0, 45,1,
+    45,135,2,
+    135,225,3,
+    225,315,4,
+    315,360, 1), 
+  ncol = 3, byrow = TRUE)
+# reclasificar en laderas
+aspect.rec = classify(aspect, rcl.matrix)
+# tabla con categorias (Look Up Table)
+lut = tibble(ID = 1:4, ladera = c("N","E","S","O"))
+# asignar categorias a los valores del raster
+levels(aspect.rec) = lut
+# observar valores y etiqueta
+unique(aspect.rec)
+# paleta de colores categorica
+colores = terrain.colors(4, alpha = 0.8)
+#graficar
+plot(aspect.rec, col = colores, main = "ExposiciÃ³n reclasificada")
+
+# reemplazar exposicion por la reclasificacion creada
+der_topo$aspect = aspect.rec
 
