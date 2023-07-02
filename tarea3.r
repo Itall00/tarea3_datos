@@ -17,8 +17,8 @@ library(lwgeom)
 options(scipen = 999)
 #aqui poner el path de la carpeta para correr todo sin cambiar a cada rato
 #path <- ""
-path = "C:/Users/alanp/Documents/5to/cs datos espaciales/tarea3" 
-#path <- "/Users/itallo/Documents/GitHub/tarea3_datos"
+#path = "C:/Users/alanp/Documents/5to/cs datos espaciales/tarea3" 
+path <- "/Users/itallo/Documents/GitHub/tarea3_datos"
 
 
 # Cargar funciones --------------------------------------------------------
@@ -561,7 +561,8 @@ der_topo$aspect = aspect.rec
 ####### Land Cover --------------------------------------------------------------
 
 # Leer Land Cover 2018
-plot(lc.crop, main = 'Land Cover Aconcagua 2018')
+lc <- lc.crop
+plot(lc, main = 'Land Cover Aconcagua 2018')
 
 # Tabla de clases (Look up table)
 lut = tibble(cat = 0:6,
@@ -571,21 +572,25 @@ lut = tibble(cat = 0:6,
                       'Agricultura de riego'))
 
 # Asignar clases a los valores del raster
-levels(lc.crop) = lut
+levels(lc) = lut
 
 # paleta de colores
 colores = RColorBrewer::brewer.pal(7, "Set1");colores
-plot(lc.crop, main = 'Land Cover Aconcagua 2018', col = colores)
+plot(lc, main = 'Land Cover Aconcagua 2018', col = colores)
 
 # Llevar LC a la misma proyeccion que la ETr
-lci = project(lc.crop, crs(et.y), method = "near")
+lc = project(lc, crs(et.y), method = "near")
 
 # cuanto mas grande son los pixeles de ET de modis con respecto a la resolucion
 # del LandCover?
-fac = res(et.y)[1]/res(lci)[1];fac
+fac = res(et.y)[1]/res(lc)[1];fac
 # cambiar resolucion a un raster
-lc.agg = aggregate(lci, fact = fac, fun = "modal")
+lc.agg = aggregate(lc, fact = fac, fun = "modal")
 plot(lc.agg, main = "LandCover de baja resolucion")
+
+# # Land Cover solo resampleando
+# lc = resample(lc, et.y, method = "near")
+# plot(lc, main = 'Land Cover Cauquenes 2018 sin agregacion', col = colores)
 
 # Resamplear LandCover para que coincida con los pixeles de ETr
 lc.res = resample(lc.agg, et.y, method = "near")
@@ -595,6 +600,7 @@ plot(lc.res, main = 'Land Cover Cauquenes 2018 con agregacion', col = colores)
 lc.pf = lc.res
 lc.pf[lc.res != 2] = NA
 plot(lc.pf, col = c("#000000"))
+
 
 ###### ETr de plantaciones forestales segun su elevacion --------------------------
 
@@ -833,25 +839,34 @@ pp.year = pp.month %>%
 pp.year
 
 # Datos descargados de la DGA
-q.month = read_csv("data/table/Caudal_Cauquenes.csv") %>% 
-  pivot_longer(cols = 2:13, names_to = "mes",values_to = "caudal") # pivotear columnas
+############
+
+############
+
+
+q.month <- readr::read_delim(paste0(path, "/Caudal_Aconcagua.csv"), delim = ";") %>%
+  pivot_longer(cols = 2:13, names_to = "mes", values_to = "caudal") 
+
 q.month
 
 # vector de fechas mensuales
-fechas = seq(ym("1987-01"), ym("2021-12"), by = "months")
+fechas = seq(ym("2000-01"), ym("2015-12"), by = "months")
 
 # crear columna con fechas
 q.month = q.month %>% 
   mutate(fecha = fechas) %>% 
-  select(fecha, caudal)
+  dplyr::select(fecha, caudal)
 q.month
+
 
 # calcular caudal medio anual
 q.year = q.month %>% 
-  mutate(fecha = floor_date(fecha,unit = "year")) %>% 
+  mutate(fecha = floor_date(fechas,unit = "year")) %>% 
   group_by(fecha) %>% 
   summarise_all(mean)
 q.year
+
+
 
 # Juntar variables del Balance Hidrico ------------------------------------
 data.year = full_join(pp.year, et.year.mod, by = "fecha") %>% 
@@ -879,3 +894,4 @@ ggplot(data.year)+
   labs(x = "tiempo", y = "(mm)", title = "Serie de tiempo mensual de componentes del BH",
        subtitle = "Los aÃ±os sin medicion de caudal, faltan datos en algunos meses",
        color = "")
+
