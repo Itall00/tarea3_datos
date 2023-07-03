@@ -17,8 +17,8 @@ library(lwgeom)
 options(scipen = 999)
 #aqui poner el path de la carpeta para correr todo sin cambiar a cada rato
 #path <- ""
-#path = "C:/Users/alanp/Documents/5to/cs datos espaciales/tarea3" 
-path <- "/Users/itallo/Documents/GitHub/tarea3_datos"
+path = "C:/Users/alanp/Documents/5to/cs datos espaciales/tarea3" 
+#path <- "/Users/itallo/Documents/GitHub/tarea3_datos"
 
 
 # Cargar funciones --------------------------------------------------------
@@ -432,6 +432,9 @@ etrmod_total %>%
 
 # Etr anual de la cuenca modificada para el balance hidrico
 
+et.mod <- project(et.mod, crs(km))
+st_crs(km)==st_crs(et.mod)
+
 extr <- terra::extract(et.mod, km)
 et.year.mod <- extr %>%
   dplyr::select(-ID) %>%
@@ -442,6 +445,8 @@ et.year.mod <- extr %>%
 et.year.mod
 
 # Etr anual de la cuenca riginalpara el balance hidrico
+et.y <- project(et.y, crs(km))
+st_crs(km)==st_crs(et.y)
 extr <- terra::extract(et.y, km)
 et.year <- extr %>%
   dplyr::select(-ID) %>%
@@ -622,7 +627,7 @@ unique(aspect.rec)
 # paleta de colores categorica
 colores = terrain.colors(4, alpha = 0.8)
 #graficar
-plot(aspect.rec, col = colores, main = "ExposiciÃƒÂ³n reclasificada")
+plot(aspect.rec, col = colores, main = "Exposición reclasificada")
 
 # reemplazar exposicion por la reclasificacion creada
 der_topo$aspect = aspect.rec
@@ -721,77 +726,13 @@ plot(lc.res, main = 'Land Cover Cauquenes 2018 con agregacion', col = colores)
 et.y
 # Extraer pixeles de plantaciones forestales
 lc.pf = lc.res
-lc.pf[lc.res != 2] = NA
+lc.pf[lc.res != 5] = NA
 plot(lc.pf, col = c("#000000"))
 
 ###### ETr de plantaciones forestales segun su elevacion --------------------------
 
 # Mapa de elevacion de plantaciones forestales
 elev = resample(der_topo$dem, lc.pf, method = "near")
-
-elev
-lc.pf
-
-
-
-##
-st_crs(elev) == st_crs(lc.pf)
-
-st_crs(elev)
-st_crs(lc.pf)
-
-lc.pf=lc.pf_reproyectado
-
-
-
-
-
-# Exportamos lc.pf a un archivo GeoTIFF
-writeRaster(lc.pf, "lc_pf2.tif")
-# Exportamos lc.pf a un archivo GeoTIFF, sobrescribiendo si es necesario
-writeRaster(lc.pf, paste0(path, "/lc_pf2.tif"), overwrite=TRUE)
-
-
-
-# Exportamos lc.pf a un archivo GeoTIFF
-writeRaster(elev, "elev2.tif")
-# Exportamos lc.pf a un archivo GeoTIFF, sobrescribiendo si es necesario
-writeRaster(elev, paste0(path, "/elev2.tif"), overwrite=TRUE)
-
-
-
-###
-library(sf)
-library(terra)
-
-# Reproyectamos lc.pf al CRS de elev (WGS 84)
-lc.pf_reproyectado <- project(lc.pf, crs(elev))
-
-# Verificamos el nuevo CRS
-crs(lc.pf_reproyectado)
-
-lc.pf=lc.pf_reproyectado
-###
-
-st_crs(lc.pf) == st_crs(elev) # verificamos que se tenga el mismo crs
-
-## Aqui buscamos solucionar que el [mask] extents do not match
-
-# Cargamos la biblioteca
-library(terra)
-
-# Recortamos elev para que tenga la misma extensiÃ³n que lc.pf
-elev_cropped <- crop(elev, ext(lc.pf))
-
-# Ahora deberÃ­as poder enmascarar sin problemas
-elev.pf = mask(elev_cropped, lc.pf)
-
-
-
-
-#### Visualizamos el problema 
-
-
 elev.pf = mask(elev, lc.pf)
 plot(elev.pf, col = c("#377EB8","#E41A1C"),
      main = "Plantaciones forestales segÃºn su elevaciÃ³n")
@@ -799,7 +740,7 @@ plot(elev.pf, col = c("#377EB8","#E41A1C"),
 
 # evapotranspiracion de plantaciones forestales clasificadas por pendiente
 et.mean.pf = zonal(et.y, elev.pf, fun = "mean", na.rm = TRUE) %>% 
-  pivot_longer(cols = 2:23, names_to = "fecha", values_to = "ET") %>% 
+  pivot_longer(cols = 2:17, names_to = "fecha", values_to = "ET") %>% 
   mutate(fecha = as_date(fecha))
 
 # grafico de et anual
@@ -816,10 +757,10 @@ ggplot(et.mean.pf)+
 lc.orig = lc.res
 
 # Eliminar pixeles de plantaciones forestales
-lc.orig[lc.res == 2] = NA
+lc.orig[lc.res == 5] = NA
 
 # LandCover sin plantaciones
-plot(lc.orig, main = "LC sin plantaciones")
+plot(lc.orig, main = "LC sin matorrales", col=colores)
 as.numeric(lc.orig) %>% unique
 
 # Agregar pixeles de Plantaciones reclasificados por altura
@@ -850,26 +791,14 @@ plot(lc.mod, col = RColorBrewer::brewer.pal(8, "Set2"), main = "LC modificado")
 
 # evapotranspiracion de plantaciones forestales clasificadas por pendiente
 et.mean = zonal(et.y, lc.mod, fun = "mean", na.rm = TRUE) %>% 
-  pivot_longer(cols = 2:23, names_to = "fecha", values_to = "ET") %>% 
+  pivot_longer(cols = 2:17, names_to = "fecha", values_to = "ET") %>% 
   mutate(fecha = as_date(fecha))
 
 # grafico de et anual
 ggplot(et.mean)+
   geom_line(aes(x = fecha, y = ET, color = name), linewidth = 0.8)+
   labs(y = "ETr (mm)", color = "Altura",
-       title = "EvapotranspiraciÃ³n real anual por cobertura de suelo")
-
-
-
-
-
-
-
-
-
-
-
-
+       title = "Evapotranspiración real anual por cobertura de suelo")
 
 # Modificar EvapotranspiraciÃƒÂ³n real ---------------------------------------
 
@@ -919,7 +848,7 @@ plot(et.y.m3)
 
 # serie de tiempo de cobertura modificada
 etrmod_total = zonal(et.mod.m3, lc.esc.1, fun = 'sum', na.rm = TRUE) %>% 
-  pivot_longer(cols = 2:23, names_to = 'fecha', values_to = 'ET') %>% 
+  pivot_longer(cols = 2:17, names_to = 'fecha', values_to = 'ET') %>% 
   mutate(fecha = as_date(fecha))
 etrmod_total
 
@@ -948,7 +877,7 @@ etrmod_total %>% ggplot(aes(x = '', y = prop, fill = name))+
 
 # Graficar solo un aÃƒÂ±o
 etrmod_total %>% 
-  filter(fecha == ymd("2021-01-01")) %>% 
+  filter(fecha == ymd("2000-01-01")) %>% 
   ggplot(aes(x = '', y = prop, fill = name))+
   geom_bar( 
     stat = 'identity', width = 1,
@@ -967,9 +896,11 @@ etrmod_total %>%
 plot(et.mod)
 plot(cuenca.t)
 # Etr anual de la cuenca modificada para el balance hidrico
+et.mod <- project(et.mod, crs(cuenca.t))
+st_crs(cuenca.t)==st_crs(et.mod)
 extr = terra::extract(et.mod, cuenca.t)
 et.year.mod = extr %>%
-  select(-ID) %>% 
+  dplyr::select(-ID) %>% 
   drop_na() %>% 
   summarise_all(median) %>%
   pivot_longer(cols = 1:ncol(.), names_to = "fecha", values_to = "et_mod") %>% 
@@ -977,68 +908,18 @@ et.year.mod = extr %>%
 et.year.mod
 
 # Etr anual de la cuenca riginalpara el balance hidrico
+et.y <- project(et.y, crs(cuenca.t))
+st_crs(cuenca.t)==st_crs(et.y)
 extr = terra::extract(et.y, cuenca.t)
 et.year = extr %>%
-  select(-ID) %>% 
+  dplyr::select(-ID) %>% 
   drop_na() %>% 
   summarise_all(median) %>%
   pivot_longer(cols = 1:ncol(.), names_to = "fecha", values_to = "et") %>% 
   mutate(fecha = as_date(fecha))
 et.year
 
-# Precipitacion CR2MET -------------------------------------------------------
-
-# carpeta donde se encuentran los archivos de evapotranspiracion real de MODIS
-pp.dir = "data/raster/PPCR2MET2.5"
-
-# obtener la direccion de los archivos en la carpeta
-files = list.files(pp.dir, full.names = TRUE, pattern = "nc$");files
-
-# leer rasters
-pp = rast(files)
-pp
-
-# crear vector de fechas
-fechas.pp = seq(
-  ymd("1960-01-01"),
-  ymd("2021-12-31"),
-  by = "days"
-)
-
-# asignamos las fechas como nombre de las capas
-names(pp) = fechas.pp
-
-# extraer valores dentro de la cuenca
-extr = terra::extract(pp, cuenca.t)
-as_tibble(extr)
-
-# calcular precipitacion promedio de la cuenca
-pp.day = extr %>%
-  select(-ID) %>% 
-  drop_na() %>% 
-  summarise_all(mean) %>% 
-  pivot_longer(cols = 1:ncol(.), names_to = "fecha", values_to = "pp")
-pp.day
-
-# PP mensual
-pp.month = pp.day %>% 
-  mutate(fecha = as_date(fecha),
-         fecha = floor_date(fecha, unit = "month")) %>% 
-  group_by(fecha) %>% 
-  summarise(pp = sum(pp))
-pp.month
-
-# PP anual
-pp.year = pp.month %>% 
-  mutate(fecha = as_date(fecha),
-         fecha = floor_date(fecha, unit = "year")) %>% 
-  group_by(fecha) %>% 
-  summarise(pp = sum(pp))
-pp.year
-
-# Datos descargados de la DGA
-############
-
+############Datos descargados de la DGA
 
 q.month <- readr::read_delim(paste0(path, "/Caudal_Aconcagua.csv"), delim = ";") %>%
   pivot_longer(cols = 2:13, names_to = "mes", values_to = "caudal") 
@@ -1085,9 +966,331 @@ ggplot(data.year)+
   geom_line(aes(x = fecha, y = disp, color = "Disponibilidad"), linewidth = 0.8)+
   geom_line(aes(x = fecha, y = disp_mod, color = "Disponibilidad_mod"), linewidth = 0.8)+
   geom_hline(yintercept = 0, linewidt = 0.8, linetype = "dashed")+
-  scale_x_date(limits = c(ymd("2000-01-01"), ymd("2021-12-31")),
+  scale_x_date(limits = c(ymd("2000-01-01"), ymd("2015-12-31")),
                date_labels = "%Y", date_breaks = "2 year")+
   labs(x = "tiempo", y = "(mm)", title = "Serie de tiempo mensual de componentes del BH",
        subtitle = "Los aÃƒÂ±os sin medicion de caudal, faltan datos en algunos meses",
        color = "")
 
+# Tendencias
+
+# ANALISIS DE TENDENCIA ---------------------------------------------------
+# Test de Mann-Kendall
+# Hipotesis nula: no hay tendencia en los datos
+# Hipotesis alternativa: hay tendencia en los datos (positiva o negativa)
+# si p-value < nivel de significancia (usualmente 0.05)
+# entonces se rechaza la hipotesis nula, es decir, existe una tendencia en los datos
+
+# Obtener tablas con el valor medio de la cuenca para cada fecha
+# ETr mensual
+et.month <- values(et.m, dataframe = TRUE) %>% # trasnformar las imagenes a una tabla (dataframe)
+  drop_na() %>% # borrar valores NA
+  summarise_all(mean) %>% # calcular el promedio de cada columna
+  pivot_longer(cols = 1:ncol(.), names_to = "fecha", values_to = "et") %>% # pivotear tabla
+  mutate(fecha = as_date(fecha))
+et.month
+
+# Etr anual
+et.year <- values(et.y, dataframe = TRUE) %>%
+  drop_na() %>%
+  summarise_all(mean) %>%
+  pivot_longer(cols = 1:ncol(.), names_to = "fecha", values_to = "et") %>%
+  mutate(fecha = as_date(fecha))
+et.year
+
+# PP mensual
+pp.month <- pp.day %>%
+  mutate(
+    fecha = as_date(fecha),
+    mes = floor_date(fecha, unit = "month")
+  ) %>%
+  group_by(mes) %>%
+  summarise(pp = sum(pp))
+pp.month
+
+# PP anual
+pp.year <- pp.month %>%
+  mutate(
+    fecha = as_date(mes),
+    year = floor_date(fecha, unit = "year")
+  ) %>%
+  group_by(year) %>%
+  summarise(pp = sum(pp))
+pp.year
+
+
+# Precipitacion -----------------------------------------------------------
+
+# Tendencia de los datos de precipitacion mensual
+res <- MannKendall(pp.month$pp)
+res
+
+
+# Tambien se puede calcular una tendencia por estaciones para eso es necesario crear un objeto "timeseries" (ts)
+pp.month.ts <- ts(data = pp.month$pp, start = c(1960, 1), frequency = 12)
+pp.month.ts
+
+# Analisis de tendencia estacional
+SeasonalMannKendall(pp.month.ts)
+
+# Agregar una linea suavizada a los datos para observar la tendencia
+ggplot(pp.month, aes(x = mes, y = pp)) +
+  geom_line() +
+  geom_smooth()
+
+# Tendencia de la precipitacion anual
+res <- MannKendall(pp.year$pp)
+res
+
+# Tambien se puede calcular una tendencia por estaciones para eso es necesario crear un objeto "timeseries" (ts)
+pp.year.ts <- ts(data = pp.year$pp, start = c(1960), frequency = 1)
+pp.year.ts
+
+# Analisis de tendencia estacional
+SeasonalMannKendall(pp.year.ts)
+
+# Agregar una linea suavizada a los datos para observar la tendencia
+ggplot(pp.year, aes(x = year, y = pp)) +
+  geom_line() +
+  geom_smooth() +
+  labs(
+    title = "Tendencia de la precipitación anual",
+    x = "Año",
+    y = "Precipitación"
+  )
+
+# Acortemos los datos desde 2010 a 2021
+pp.year.2 <- pp.year %>% filter(year > ymd("2000-01-01"))
+
+# Tendencia de la precipitacion anual
+res <- MannKendall(pp.year.2$pp)
+res
+
+# Tambien se puede calcular una tendencia por estaciones para eso es necesario crear un objeto "timeseries" (ts)
+pp.year.2.ts <- ts(data = pp.year.2$pp, start = c(2001), frequency = 1)
+pp.year.2.ts
+
+# Analisis de tendencia estacional
+SeasonalMannKendall(pp.year.2.ts)
+
+# Agregar una linea suavizada a los datos para observar la tendencia
+ggplot(pp.year.2, aes(x = year, y = pp)) +
+  geom_line() +
+  geom_smooth()
+
+
+# Evapotranspiracion real -------------------------------------------------
+# Tendencia de los datos de Evapotranspiracion mensual
+res <- MannKendall(et.month$et)
+res
+
+# Tambien se puede calcular una tendencia por estaciones para eso es necesario crear un objeto "timeseries" (ts)
+et.month.ts <- ts(data = et.month$et, start = c(2000, 1), frequency = 12)
+et.month.ts
+
+# Analisis de tendencia estacional
+SeasonalMannKendall(et.month.ts)
+
+# Agregar una linea suavizada a los datos para observar la tendencia
+ggplot(et.month, aes(x = fecha, y = et)) +
+  geom_line() +
+  geom_smooth() +
+  labs(
+    title = "Tendencia de evapotranspiración por estaciones",
+    x = "Año",
+    y = "evapotranspiración"
+  )
+
+
+# Tendencia de la precipitacion anual
+res <- MannKendall(et.year$et)
+res
+
+# Tambien se puede calcular una tendencia por estaciones para eso es necesario crear un objeto "timeseries" (ts)
+et.year.ts <- ts(data = et.year$et, start = c(1960), frequency = 1)
+et.year.ts
+
+# Agregar una linea suavizada a los datos para observar la tendencia
+ggplot(et.year, aes(x = fecha, y = et)) +
+  geom_line() +
+  geom_smooth() +
+  labs(
+    title = "Tendencia de evapotranspiración anual",
+    x = "Año",
+    y = "evapotranspiración"
+  )
+
+# Balance Hídrico.
+# Datos de caudales estan en m3/s mientras que PP y ETr estan en mm
+# Se deben transformar datos de m3/s a mm
+# La fórmula para convertir la media mensual de caudal en metros cúbicos por segundo a
+# caudal acumulado mensual en milímetros es:
+#
+#   caudal mensual en milímetros =
+#       (caudal medio mensual en metros cúbicos por segundo x
+#       60 segundos por minuto x
+#       60 minutos por hora x
+#       24 horas por día x
+#       número de días en el mes) /
+#       (área de la cuenca en metros cuadrados x 0.001)
+#
+# Donde:
+#
+#   La precipitación acumulada mensual se expresa en milímetros.
+#   El caudal medio mensual se expresa en metros cúbicos por segundo.
+#   El área de la cuenca se expresa en metros cuadrados.
+#   El factor de conversión de 0.001 se usa para convertir de metros a milímetros.
+
+# calcular el area de la cuenca
+sf_use_s2(FALSE) # necesario cuando la cuenca esta en coordenadas geográficas
+st_area(km) # calcular area
+area_cuenca <- st_area(km) %>% as.numeric() # sacar solo el valor sin la unidad
+area_cuenca
+
+# m3/s -> mm
+q.month <- q.month %>% mutate(
+  days = days_in_month(fecha),
+  caudal = caudal * (3600 * 24 * days) / (0.001 * area_cuenca)
+)
+### hasta aqui vamo bien jeje
+data.month <- pp.month %>%
+  rename(fecha = mes) %>%
+  left_join(et.month, by = "fecha") %>%
+  full_join(q.month, by = "fecha") %>%
+  dplyr::select(-days)
+
+
+
+ggplot(data.month) +
+  geom_line(aes(x = fecha, y = pp, color = "Precipitación")) +
+  geom_line(aes(x = fecha, y = et, color = "ETr")) +
+  geom_line(aes(x = fecha, y = caudal, color = "Caudal")) +
+  scale_x_date(limits = c(ymd("2000-01-01"), ymd("2015-12-31"))) +
+  labs(
+    x = "tiempo", y = "(mm)", title = "Serie de tiempo mensual de componentes del BH",
+    color = ""
+  )
+
+# Calcular media mensual por variable para el mismo periodo de tiempo (2000 en adelante)
+data.mean <- data.month %>%
+  drop_na() %>%
+  mutate(mes = month(fecha)) %>%
+  group_by(mes) %>%
+  summarise_all(mean) %>%
+  mutate(disp = pp - et - caudal)
+
+ggplot(data.mean) +
+  geom_line(aes(x = mes, y = pp, color = "Precipitación"), linewidth = 0.8) +
+  geom_line(aes(x = mes, y = et, color = "ETr"), linewidth = 0.8) +
+  geom_line(aes(x = mes, y = caudal, color = "Caudal"), linewidth = 0.8) +
+  geom_line(aes(x = mes, y = disp, color = "Disponibilidad"), linewidth = 0.8) +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed", linewidth = 0.8) +
+  # scale_x_date(limits = c(ymd("2000-01-01"), ymd("2021-12-31")))+
+  labs(
+    x = "mes", y = "(mm)", title = "Balance hídrico medio mensual",
+    color = ""
+  )
+
+# Balance a hidrico anual
+
+# calcular acumulado anual
+data.year <- data.month %>%
+  mutate(fecha = floor_date(fecha, unit = "year")) %>%
+  group_by(fecha) %>%
+  summarise_all(sum) %>%
+  mutate(disp = pp - et - caudal)
+
+# serie de tiempo de datos anuales
+ggplot(data.year) +
+  geom_line(aes(x = fecha, y = pp, color = "Precipitación"), linewidth = 0.8) +
+  geom_line(aes(x = fecha, y = et, color = "ETr"), linewidth = 0.8) +
+  geom_line(aes(x = fecha, y = caudal, color = "Caudal"), linewidth = 0.8) +
+  geom_point(aes(x = fecha, y = caudal, color = "Caudal"), linewidth = 0.8) +
+  geom_line(aes(x = fecha, y = disp, color = "Disponibilidad"), linewidth = 0.8) +
+  scale_x_date(
+    limits = c(ymd("2000-01-01"), ymd("2015-12-31")),
+    date_labels = "%Y", date_breaks = "2 year"
+  ) +
+  labs(
+    x = "tiempo", y = "(mm)", title = "Serie de tiempo mensual de componentes del BH",
+    subtitle = "Los año sin medicion de caudal, faltan datos en algunos meses",
+    color = ""
+  )
+
+# hay meses de caudales que no tienen datos, por eso hay años que no tienen datos de caudales
+# podemos eliminar esos meses con drop_na
+# calcular acumulado anual sin contar los meses de datos faltantes
+data.year <- data.month %>%
+  mutate(fecha = floor_date(fecha, unit = "year")) %>%
+  drop_na() %>%
+  group_by(fecha) %>%
+  summarise_all(sum) %>%
+  mutate(disp = pp - et - caudal)
+
+# serie de tiempo de datos anuales
+ggplot(data.year) +
+  geom_line(aes(x = fecha, y = pp, color = "Precipitación"), linewidth = 0.8) +
+  geom_line(aes(x = fecha, y = et, color = "ETr"), linewidth = 0.8) +
+  geom_line(aes(x = fecha, y = caudal, color = "Caudal"), linewidth = 0.8) +
+  geom_point(aes(x = fecha, y = caudal, color = "Caudal"), linewidth = 0.8) +
+  geom_line(aes(x = fecha, y = disp, color = "Disponibilidad"), linewidth = 0.8) +
+  scale_x_date(
+    limits = c(ymd("2000-01-01"), ymd("2015-12-31")),
+    date_labels = "%Y", date_breaks = "2 year"
+  ) +
+  labs(
+    x = "tiempo", y = "(mm)", title = "Serie de tiempo mensual de componentes del BH",
+    subtitle = "Se eliminan los meses de datos de caudal faltantes antes de sumar el acumulado anual",
+    color = ""
+  )
+
+
+# Podemos tambien ignorar los años donde faltan datos mensuales de caudales
+# calcular acumulado anual sin contar los meses de datos faltantes
+data.year <- data.month %>%
+  mutate(fecha = floor_date(fecha, unit = "year")) %>%
+  group_by(fecha) %>%
+  summarise_all(sum) %>%
+  mutate(disp = pp - et - caudal) %>%
+  drop_na()
+
+# serie de tiempo de datos anuales
+ggplot(data.year) +
+  geom_line(aes(x = fecha, y = pp, color = "Precipitación"), linewidth = 0.8) +
+  geom_line(aes(x = fecha, y = et, color = "ETr"), linewidth = 0.8) +
+  geom_line(aes(x = fecha, y = caudal, color = "Caudal"), linewidth = 0.8) +
+  geom_point(aes(x = fecha, y = caudal, color = "Caudal"), linewidth = 0.8) +
+  geom_line(aes(x = fecha, y = disp, color = "Disponibilidad"), linewidth = 0.8) +
+  scale_x_date(
+    limits = c(ymd("2000-01-01"), ymd("2015-12-31")),
+    date_labels = "%Y", date_breaks = "2 year"
+  ) +
+  labs(
+    x = "tiempo", y = "(mm)", title = "Serie de tiempo mensual de componentes del BH",
+    subtitle = "Se ignoran los años donde faltan datos mensuales de caudal",
+    color = ""
+  )
+
+# Tambien podemos ignorar los meses donde no hay medicion de caudales solo para esa variable
+data.year <- data.month %>%
+  mutate(fecha = floor_date(fecha, unit = "year")) %>%
+  group_by(fecha) %>%
+  summarise_all(sum, na.rm = TRUE) %>% # aqui sumamos independiente de si faltan algunos meses en el año
+  mutate(disp = pp - et - caudal)
+
+# serie de tiempo de datos anuales
+ggplot(data.year) +
+  geom_line(aes(x = fecha, y = pp, color = "Precipitación"), linewidth = 0.8) +
+  geom_line(aes(x = fecha, y = et, color = "ETr"), linewidth = 0.8) +
+  geom_line(aes(x = fecha, y = caudal, color = "Caudal"), linewidth = 0.8) +
+  geom_point(aes(x = fecha, y = caudal, color = "Caudal"), linewidth = 0.8) +
+  geom_line(aes(x = fecha, y = disp, color = "Disponibilidad"), linewidth = 0.8) +
+  scale_x_date(
+    limits = c(ymd("2000-01-01"), ymd("2015-12-31")),
+    date_labels = "%Y", date_breaks = "2 year"
+  ) +
+  labs(
+    x = "tiempo", y = "(mm)", title = "Serie de tiempo mensual de componentes del BH",
+    subtitle = "La suma anual se hace con todos los meses disponibles para cada variable",
+    color = ""
+  )
