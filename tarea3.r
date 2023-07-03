@@ -74,7 +74,7 @@ pp # datos de CR2MET almacenados en pp
 # crear vector de fechas
 fechas.pp <- seq(
   ymd("2000-01-01"), ## cambio de fecha
-  ymd("2022-12-31"),
+  ymd("2015-12-31"),
   by = "days"
 )
 # asignamos las fechas como nombre de las capas
@@ -921,9 +921,8 @@ et.year
 
 ############Datos descargados de la DGA
 
-q.month <- readr::read_delim(paste0(path, "/Caudal_Aconcagua.csv"), delim = ";") %>%
-  pivot_longer(cols = 2:13, names_to = "mes", values_to = "caudal") 
-
+q.month <- read_csv(paste0(path, "/Caudal_Aconcagua.csv")) %>%
+  pivot_longer(cols = 2:13, names_to = "mes", values_to = "caudal") # pivotear columnas
 q.month
 
 # vector de fechas mensuales
@@ -958,18 +957,18 @@ data.year = full_join(pp.year, et.year.mod, by = "fecha") %>%
 # Balance a hidrico anual
 # serie de tiempo de datos anuales
 ggplot(data.year)+
-  geom_line(aes(x = fecha, y = pp, color = "PrecipitaciÃ³n"), linewidth = 0.8)+
+  geom_line(aes(x = fecha, y = pp, color = "Precipitaci�n"), linewidth = 0.8)+
   geom_line(aes(x = fecha, y = et, color = "ETr"), linewidth = 0.8)+
   geom_line(aes(x = fecha, y = et_mod, color = "ETr_modificada"), linewidth = 0.8)+
   geom_line(aes(x = fecha, y = caudal,color = "Caudal"), linewidth = 0.8)+
-  geom_point(aes(x = fecha, y = caudal,color = "Caudal"), linewidth = 0.8)+
+  geom_point(aes(x = fecha, y = caudal,color = "Caudal"))+
   geom_line(aes(x = fecha, y = disp, color = "Disponibilidad"), linewidth = 0.8)+
   geom_line(aes(x = fecha, y = disp_mod, color = "Disponibilidad_mod"), linewidth = 0.8)+
-  geom_hline(yintercept = 0, linewidt = 0.8, linetype = "dashed")+
+  geom_hline(yintercept = 0, linewidth = 0.8, linetype = "dashed")+
   scale_x_date(limits = c(ymd("2000-01-01"), ymd("2015-12-31")),
                date_labels = "%Y", date_breaks = "2 year")+
   labs(x = "tiempo", y = "(mm)", title = "Serie de tiempo mensual de componentes del BH",
-       subtitle = "Los aÃ±os sin medicion de caudal, faltan datos en algunos meses",
+       subtitle = "Los a�os sin medicion de caudal, faltan datos en algunos meses",
        color = "")
 
 # Tendencias
